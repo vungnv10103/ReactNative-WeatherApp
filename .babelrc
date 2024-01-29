@@ -1,0 +1,12 @@
+{
+    "plugins": [
+        [
+            "transform-inline-environment-variables",
+            {
+                "include": [
+                    "API_KEY"
+                ]
+            }
+        ]
+    ]
+}
