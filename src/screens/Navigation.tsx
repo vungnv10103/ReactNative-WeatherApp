@@ -13,7 +13,11 @@ const TabArr = [
 export default function Navigation() {
     return (
         <Tab.Navigator initialRouteName='Home'
-            onTabLongPress={(item) => console.log(item.route.title)}
+            onTabLongPress={(item) => {
+                const key: string = item.route.key;
+                const title = key.substring(0, key.indexOf("-"));
+                console.log(title);
+            }}
             screenOptions={{
 
             }}
@@ -27,6 +31,7 @@ export default function Navigation() {
                     name={tab.route}
                     component={tab.component}
                     options={{
+                        title: tab.label,
                         tabBarLabel: tab.label,
                         tabBarBadge: tab.label === "Notification" ? 3 : undefined,
                         tabBarIcon: ({ focused, color }) => (
