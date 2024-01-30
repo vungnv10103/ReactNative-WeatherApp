@@ -18,7 +18,9 @@ import Animated, {
 } from 'react-native-reanimated';
 
 const forecastDay = 7;
-const duration = 2000;
+const durationLoading = 2000;
+const durationToast = 1000;
+const timeoutAPI = 60000;
 const easing = Easing.bezier(0.25, -0.5, 0.25, 1);
 
 import { fetchLocation, fetchWeatherForecast } from '../service/api.weather';
@@ -68,7 +70,7 @@ export default function HomeScreen() {
     const getCurrentLocation = async () => {
         GetLocation.getCurrentPosition({
             enableHighAccuracy: true,
-            timeout: 60000,
+            timeout: timeoutAPI,
         })
             .then(location => {
                 // console.log(location);
@@ -117,7 +119,7 @@ export default function HomeScreen() {
 
     useEffect(() => {
         if (isLoading) {
-            sv.value = withRepeat(withTiming(1, { duration, easing }), -1);
+            sv.value = withRepeat(withTiming(1, { duration: durationLoading, easing }), -1);
         }
         getWeatherPrevious();
     }, []);
