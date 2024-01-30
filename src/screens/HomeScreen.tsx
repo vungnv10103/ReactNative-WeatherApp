@@ -5,7 +5,7 @@ import { theme } from '../theme';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
 import { apiKeyGoogle, apiKeyOpenCage } from '../constants';
-import GetLocation from 'react-native-get-location'
+import GetLocation from 'react-native-get-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import Animated, {
@@ -17,8 +17,8 @@ import Animated, {
     withTiming,
 } from 'react-native-reanimated';
 
-const duration = 2000;
 const forecastDay = 7;
+const duration = 2000;
 const easing = Easing.bezier(0.25, -0.5, 0.25, 1);
 
 import { fetchLocation, fetchWeatherForecast } from '../service/api.weather';
@@ -65,16 +65,6 @@ export default function HomeScreen() {
 
     const handleTextDebounce = useCallback(debounce(handleSearch, 1200), []);
 
-    const getWeatherPrevious = async () => {
-        let previusLocation: string | null = await AsyncStorage.getItem('location');
-        if (previusLocation != null) {
-            let location: ILocation = JSON.parse(previusLocation);
-            handleLocation(location);
-        }
-        else {
-            await getCurrentLocation();
-        }
-    }
     const getCurrentLocation = async () => {
         GetLocation.getCurrentPosition({
             enableHighAccuracy: true,
@@ -113,11 +103,23 @@ export default function HomeScreen() {
             });
     }
 
+    const getWeatherPrevious = async () => {
+        let previusLocation: string | null = await AsyncStorage.getItem('location');
+        if (previusLocation != null) {
+            let location: ILocation = JSON.parse(previusLocation);
+            handleLocation(location);
+        }
+        else {
+            await getCurrentLocation();
+        }
+    }
+
+
     useEffect(() => {
-        getWeatherPrevious();
         if (isLoading) {
             sv.value = withRepeat(withTiming(1, { duration, easing }), -1);
         }
+        getWeatherPrevious();
     }, []);
 
 
