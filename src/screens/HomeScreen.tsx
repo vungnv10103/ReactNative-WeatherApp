@@ -11,14 +11,18 @@ import Animated, {
 import { fetchLocation, fetchWeatherForecast } from '../service/api.weather';
 
 
-import { ILocation, IWeather, IForecast } from '../interface/_index'
-import { getImageSource } from '../constants';
+import { ILocation, IWeather, IForecastDay } from '../interface/_index'
+import { convertENtoVi, formatTemperature, getImageSource } from '../constants';
 
 export default function HomeScreen() {
 
     const [showSearch, toggleSearch] = useState(false);
+    const [isLoading, setLoading] = useState(false);
     const [locations, setLocations] = useState<ILocation[]>([]);
-    const [weather, setWeather] = useState<any>({})
+    const [weather, setWeather] = useState<IWeather | null>(null);
+    const { current, location } = weather || {};
+    const forecastLength = weather?.forecast?.forecastday?.length || 0;
+    const imageWeatherClass = current?.condition.text.trim() == "Fog" ? " ml-10" : "";
 
     const handleLocation = (location: ILocation): void => {
         setLocations([]);
@@ -28,11 +32,11 @@ export default function HomeScreen() {
             days: 7
         }).then(data => {
             console.log(data);
-
             setWeather(data);
         });
 
-    }
+    };
+
     const handleSearch = (value: string) => {
         if (value.length < 2) return;
         fetchLocation({
@@ -40,13 +44,13 @@ export default function HomeScreen() {
         }).then(data => {
             setLocations(data);
         });
-    }
+    };
+
     const handleTextDebounce = useCallback(debounce(handleSearch, 1200), []);
-    const { current, location } = weather;
 
     useEffect(() => {
 
-    }, [])
+    }, []);
 
 
     return (
@@ -104,70 +108,79 @@ export default function HomeScreen() {
                     </View>
 
                     {/* forecast section */}
-                    <View className='mx-4 flex flex-1 mt-10 mb-2'>
+                    <View className='mx-4 flex flex-1'>
                         {/* location */}
-                        <Text style={{ fontFamily: "Inter-Bold" }} className='text-white text-center text-2xl'>
+                        <Text style={{ fontFamily: "Inter-Bold" }} className='text-white text-center pt-6 text-3xl'>
                             {location?.name != undefined ? location?.name + ", " : ""}
-                            <Text style={{ fontFamily: "Inter-Medium" }} className='text-lg text-gray-300'>
+                            <Text style={{ fontFamily: "Inter-Medium" }} className='text-xl text-gray-300'>
                                 {location?.country}
                             </Text>
                         </Text>
                         {/* weather image */}
-                        <View className='flex-row justify-center'>
+                        <View className={'flex-row justify-center mt-3' + imageWeatherClass}>
                             <Image
                                 className='w-52 h-52'
-                                source={getImageSource(current?.condition?.text)}
+                                source={getImageSource(current?.condition.text || 'default')}
                             // source={{uri: `https:${current?.condition?.icon}`}}
                             />
                         </View>
                         {/* degree celcius */}
                         <View className='space-y-2 mt-4'>
                             <Text style={{ fontFamily: "Inter-Bold" }} className='text-center text-white text-6xl ml-5'>
-                                {current?.temp_c}&#176;
+                                {formatTemperature(current?.temp_c || "default")}
                             </Text>
                             <Text style={{ fontFamily: "Inter-Bold" }} className='text-center text-white text-xl tracking-widest'>
-                                {current?.condition?.text}
+                                {convertENtoVi(current?.condition?.text || "")}
                             </Text>
                         </View>
+
                         {/* other status */}
-                        <View className='flex-row justify-between mt-4 mx-4'>
-                            <View className='flex-row space-x-2 items-center'>
-                                <Image style={{ tintColor: '#ffffff' }} className='w-6 h-6' source={require('../assets/images/wind_1.png')} />
-                                <Text style={{ fontFamily: "Inter-Medium" }} className='text-white text-base'>
-                                    {current?.wind_kph}km/h
-                                </Text>
+                        {
+                            current && <View className='flex-row justify-between mt-4 mx-1.5'>
+                                <View className='flex-row space-x-2 items-center'>
+                                    <Image style={{ tintColor: '#ffffff' }} className='w-6 h-6' source={require('../assets/images/wind_1.png')} />
+                                    <Text style={{ fontFamily: "Inter-Medium" }} className='text-white text-base'>
+                                        {current?.wind_kph || 0.0} km/h
+                                    </Text>
+                                </View>
+                                <View className='flex-row space-x-2 items-center'>
+                                    <Image style={{ tintColor: '#ffffff' }} className='w-6 h-6' source={require('../assets/images/drop.png')} />
+                                    <Text style={{ fontFamily: "Inter-Medium" }} className='text-white text-base'>
+                                        {current?.humidity || 0.0} &#37;
+                                    </Text>
+                                </View>
+                                <View className='flex-row space-x-2 items-center'>
+                                    <Image style={{ tintColor: '#ffffff' }} className='w-6 h-6' source={require('../assets/images/sun.png')} />
+                                    <Text style={{ fontFamily: "Inter-Medium" }} className='text-white text-base'>
+                                        4:35 PM
+                                    </Text>
+                                </View>
                             </View>
-                            <View className='flex-row space-x-2 items-center'>
-                                <Image style={{ tintColor: '#ffffff' }} className='w-6 h-6' source={require('../assets/images/drop.png')} />
-                                <Text style={{ fontFamily: "Inter-Medium" }} className='text-white text-base'>
-                                    {current?.humidity}&#37;
-                                </Text>
-                            </View>
-                            <View className='flex-row space-x-2 items-center'>
-                                <Image style={{ tintColor: '#ffffff' }} className='w-6 h-6' source={require('../assets/images/sun.png')} />
-                                <Text style={{ fontFamily: "Inter-Medium" }} className='text-white text-base'>
-                                    4:35 PM
-                                </Text>
-                            </View>
-                        </View>
+                        }
+
                     </View>
 
                     {/* forecast for nextday */}
-                    <View className='mt-5 mb-2 space-y-3'>
-                        <View className='flex-row items-center mx-5 mt-4 space-x-2'>
-                            <Ionicons name={'calendar-outline'} color={'white'} size={22} />
-                            <Text style={{ fontFamily: "Inter-Medium" }} className='text-white text-base'>Daily forecast</Text>
-                        </View>
-                        {
-                            weather?.forecast?.forecastday.length > 0 ? (
+                    {forecastLength > 0 ? (
+                        <View className='mt-5 mb-2 space-y-3'>
+                            <View className='flex-row items-center mx-5 mt-4 space-x-2'>
+                                <Ionicons name={'calendar-outline'} color={'white'} size={22} />
+                                <Text style={{ fontFamily: "Inter-Bold" }} className='text-white text-base'>Daily forecast</Text>
+                            </View>
+                            {
                                 <ScrollView
                                     horizontal
                                     showsHorizontalScrollIndicator={false}
                                     contentContainerStyle={{ paddingHorizontal: 15, paddingBottom: 30 }}
                                 >
                                     {
-                                        weather?.forecast?.forecastday.map((item: IForecast, index: number) => {
+                                        weather?.forecast?.forecastday.map((item: IForecastDay, index: number) => {
                                             // console.log(item?.day?.condition?.text);
+                                            let date = new Date(item.date);
+                                            let options: Intl.DateTimeFormatOptions = { weekday: 'long' };
+                                            let dayName = date.toLocaleDateString('en-US', options);
+                                            dayName = dayName.split(',')[0];
+
                                             return (
                                                 <TouchableOpacity key={index} style={{ backgroundColor: theme.bgWhite(0.15) }}
                                                     className='flex justify-center items-center w-24 rounded-3xl py-3 space-y-1 mr-4'>
@@ -177,7 +190,7 @@ export default function HomeScreen() {
                                                     // source={require('../assets/images/heavyrain.png')}
                                                     />
                                                     <Text style={{ fontFamily: "Inter-Medium" }} className='text-white'>
-                                                        {item?.date}
+                                                        {dayName}
                                                     </Text>
                                                     <Text style={{ fontFamily: "Inter-Bold" }} className='text-white text-xl'>
                                                         {item?.day?.avgtemp_c}&#176;
@@ -187,9 +200,10 @@ export default function HomeScreen() {
                                         })
                                     }
                                 </ScrollView>
-                            ) : null
-                        }
-                    </View>
+                            }
+                        </View>
+                    ) : null}
+                    <View className='h-24'></View>
                 </SafeAreaView>
             </ScrollView>
         </ImageBackground>

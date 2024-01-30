@@ -1,9 +1,9 @@
 import { ILocation } from "./ILocation";
 import { IWeather } from "./IWeather";
-import { IForecast } from "./IForecast";
+import { IForecastDay } from "./IForecastDay";
 
 export type {
     ILocation,
     IWeather,
-    IForecast,
+    IForecastDay,
 }
