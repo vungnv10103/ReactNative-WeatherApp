@@ -64,7 +64,7 @@ export default function LoginScreen(props: any) {
         });
     }
 
-    const getConfigAppByUser = async (idUser: string) => {
+    const getConfigAppByUser = async (idUser: string): Promise<IConfig> => {
         return new Promise<any>((resolve) => {
             const dbRef = databaseRef(database, `app/config/user/${idUser}`);
             onValue(dbRef, (snapshot) => {
@@ -77,7 +77,7 @@ export default function LoginScreen(props: any) {
                     configData.push(childData);
                 });
                 const config: IConfig[] = configData;
-                resolve(config[0].maintain);
+                resolve(config[0]);
             }, {
                 onlyOnce: true
             });
@@ -172,8 +172,8 @@ export default function LoginScreen(props: any) {
         }
     }
     const handleLogin = async (user: User) => {
-        let isMaintainUser = await getConfigAppByUser(user.uid);
-        if (isMaintainUser) {
+        let { maintain } = await getConfigAppByUser(user.uid);
+        if (maintain) {
             await handleEvent("Thông báo !", "Ứng dụng tạm đóng để tiến hành bảo trì.\nVui lòng quay lại sau.", "info", "maintain", 5000);
         } else {
             setCurrentUser(user);
@@ -306,7 +306,7 @@ export default function LoginScreen(props: any) {
                                     secureTextEntry={!isShowPassword}
                                 />
                                 <Ionicons
-                                    name={'eye'} color={'white'} size={24}
+                                    name={isShowPassword ? 'eye' : 'eye-off'} color={'white'} size={24}
                                     style={{
                                         width: '10%',
                                         marginLeft: 2,

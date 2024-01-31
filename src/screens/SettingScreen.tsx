@@ -1,7 +1,7 @@
 import { View, Text, StatusBar, TouchableOpacity, ImageBackground, Button } from 'react-native'
 import React, { useState, useEffect } from 'react'
 
-import { IUser } from '../interface/_index';
+import { IConfig, IUser } from '../interface/_index';
 
 import { auth, database, storage } from '../config/firebase.config';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -39,7 +39,7 @@ export default function SettingScreen(props: any) {
 
     const [selectedImage, setSelectedImage] = useState(null);
     const [progress, setProgress] = useState<number | any>(0)
-    const [isFomInputVisiable, setFormInputVisiable] = useState(false);
+    const [isConfig, setShowConfig] = useState(false);
 
     const [isShowView, setShowView] = useState(false);
     const [isLoading, setLoading] = useState(true);
@@ -50,9 +50,31 @@ export default function SettingScreen(props: any) {
     }));
 
 
+    const getConfigAppByUser = async (idUser: string | undefined): Promise<IConfig> => {
+        return new Promise<any>((resolve) => {
+            const dbRef = databaseRef(database, `app/config/user/${idUser}`);
+            onValue(dbRef, (snapshot) => {
+                const configData: any[] | ((prevState: never[]) => never[]) = [];
+                snapshot.forEach((childSnapshot) => {
+                    const childKey = childSnapshot.key;
+                    const childData = childSnapshot.val();
+                    configData.push(childData);
+                });
+                const config: IConfig[] = configData;
+                resolve(config[0]);
+            }, {
+                onlyOnce: true
+            });
+        });
+    }
+
     const checkUserLogged = async () => {
         onAuthStateChanged(auth, async (user) => {
             if (user) {
+                let { config } = await getConfigAppByUser(user.uid);
+                if (config) {
+                    setShowConfig(true);
+                }
                 setUser(user);
                 setShowView(true);
             }
@@ -76,85 +98,21 @@ export default function SettingScreen(props: any) {
     }
 
     const handleEvent = async (title: string, message: string, type: MessageType | null, eventType: string) => {
+        switch (eventType) {
+            case "logout":
+                logout();
+                break;
+
+            default:
+                console.log("eventType: ", eventType);
+                break;
+        }
         showMessage({
             message: title,
             description: message,
             type: type != null ? type : 'default',
             duration: durationToast,
-            onHide() {
-                switch (eventType) {
-                    case "logout":
-                        logout();
-                        break;
-
-                    default:
-                        console.log("eventType: ", eventType);
-                        break;
-                }
-            },
         });
-    }
-
-    const handleFormInputSubmit = async (idCate: string, idProduct: string, nameProduct: string, description: string, price: string, imageSelected: any) => {
-        try {
-            const response = await fetch(imageSelected.uri);
-            const blob = await response.blob()
-            const fileName = `${uuid.v4()}.png`;
-            const mStorageRef = storageRef(storage, "images/" + fileName)
-            const uploadTask = uploadBytesResumable(mStorageRef, blob)
-            uploadTask.on("state_changed", (snapshot) => {
-                const progress: any = (snapshot.bytesTransferred / snapshot.totalBytes) * 100
-                setProgress(progress.toFixed())
-            },
-                (error) => {
-                    // Handle error
-                    console.log(error.code);
-                },
-                () => {
-                    getDownloadURL(uploadTask.snapshot.ref).then(async (downLoadURL: any) => {
-                        // save record
-                        console.log("File at: " + downLoadURL);
-                        setSelectedImage(downLoadURL);
-
-                        const dbRef = 'products';
-                        const dataRef = databaseRef(database, dbRef);
-
-                        // get key
-                        const newDataRef = push(dataRef);
-                        const dataID = newDataRef.key;
-                        const newData = {
-                            id: dataID,
-                            idCate: idCate,
-                            idSeller: currentUser?.uid,
-                            name: nameProduct,
-                            description: description,
-                            price: price,
-                            img: downLoadURL,
-                            sold: 0,
-                            status: 0,
-                            sale: 0
-                        };
-                        try {
-                            await runTransaction(dataRef, (currentData) => {
-                                if (!currentData) {
-                                    return [newData];
-                                } else {
-                                    currentData.push(newData);
-                                    return currentData;
-                                }
-                            });
-                            console.log('Thêm mới thành công!');
-
-                        } catch (error) {
-                            console.error('Thêm thất bại:', error);
-                        }
-                        setFormInputVisiable(false)
-                    })
-                }
-            )
-        } catch (error) {
-            console.error('Error uploading image to Firebase Storage', error);
-        }
     }
 
     useEffect(() => {
@@ -175,11 +133,11 @@ export default function SettingScreen(props: any) {
                     <Text style={{ fontFamily: 'Inter-Medium' }} className='text-white text-base'>
                         Email: <Text style={{ fontFamily: 'Inter-Bold' }} className='text-xl'>{currentUser?.email}</Text>
                     </Text>
-                    <TouchableOpacity
+                    {isConfig && <TouchableOpacity
                         className="w-full bg-sky-400 p-3 rounded-lg mb-3"
                         onPress={() => props.navigation.navigate("FormInput")}>
                         <Text style={{ fontFamily: 'Inter-Bold' }} className="text-xl text-white text-center">Config</Text>
-                    </TouchableOpacity>
+                    </TouchableOpacity>}
 
                     {/* Logout */}
                     <TouchableOpacity

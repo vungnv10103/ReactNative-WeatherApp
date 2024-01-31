@@ -1,10 +1,14 @@
-import { View, Text, StatusBar, TextInput, Image, TouchableOpacity, ActivityIndicator, ScrollView, ImageBackground } from 'react-native';
+import { View, Text, StatusBar, TextInput, Image, TouchableOpacity, ActivityIndicator, ScrollView, ImageBackground, Linking } from 'react-native';
 import React, { useState, useEffect } from 'react';
 
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
+import uuid from 'react-native-uuid';
 import { auth, database, storage } from '../config/firebase.config';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { getDownloadURL, ref as storageRef, uploadBytes, uploadBytesResumable } from "firebase/storage";
+import { User, onAuthStateChanged, signOut } from 'firebase/auth';
+import { getDatabase, runTransaction, push, ref as databaseRef, onValue, query, orderByChild, get, update, set } from "firebase/database";
+
 
 import FlashMessage, { showMessage, hideMessage, MessageType } from "react-native-flash-message";
 
@@ -19,6 +23,7 @@ import Animated, {
     withTiming,
 } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { IConfig } from '../interface/_index';
 
 const durationLoading = 2000;
 const easing = Easing.bezier(0.25, -0.5, 0.25, 1);
@@ -33,9 +38,11 @@ export default function FormInputScreen(props: any) {
     const [apiGoogle, setApiGoogle] = useState('')
     const [apiLocation, setApiLocation] = useState('')
     const [img, setImage] = useState('')
+    const [currentUser, setUser] = useState<User>();
     const [isShowView, setShowView] = useState(false);
-    const [loading, isLoading] = useState(false)
-    const [progress, setProgress] = useState(0);
+    const [loading, setLoading] = useState(false)
+    const [isShowAreaImage, setShowAreaImage] = useState(false)
+    const [progress, setProgress] = useState("");
 
 
     const animatedStyle = useAnimatedStyle(() => ({
@@ -44,8 +51,31 @@ export default function FormInputScreen(props: any) {
 
     const handleClose = () => { props.navigation.goBack() }
 
+    const handleReset = async () => {
+        await writeUserData(currentUser?.uid, "", "", "", false);
+    }
+
+    const writeUserData = async (userId: string | undefined, apiWeather: string, apiGoogle: string, apiLocation: string, isChangeAPI: boolean) => {
+        if (userId !== undefined) {
+            setShowView(false);
+            setLoading(true);
+            // write config
+            await set(databaseRef(database, `app/config/user/${userId}/0/change_api`), true);
+            await set(databaseRef(database, `app/config/user/${userId}/0/api`), {
+                apiWeather,
+                apiGoogle,
+                apiLocation
+            });
+            setLoading(false);
+            setShowView(true);
+        }
+    }
+
     const handleSubmit = async () => {
-        // check input api
+        await writeUserData(currentUser?.uid, apiWeather, apiGoogle, apiLocation, true);
+        if (selectedImage.uri.length > 0) {
+            await uploadImage(currentUser?.uid, selectedImage.uri);
+        }
     }
 
 
@@ -77,15 +107,79 @@ export default function FormInputScreen(props: any) {
         });
     }
 
-    const checkUserLogged = async () => {
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                setShowView(true);
-            }
-            else {
-                logout();
-            }
+    const checkUserLogged = async (): Promise<User> => {
+        return new Promise<any>((resolve) => {
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    setShowView(true);
+                    resolve(user)
+                }
+                else {
+                    logout();
+                }
+            });
         });
+    }
+
+    const uploadImage = async (idUser: string | undefined, imageSelected: string) => {
+        if (idUser !== undefined) {
+            setShowView(false);
+            setLoading(true);
+            try {
+                const response = await fetch(imageSelected);
+                const blob = await response.blob()
+                const fileName = `${uuid.v4()}.png`;
+                const mStorageRef = storageRef(storage, `images/${idUser}/` + fileName)
+                const uploadTask = uploadBytesResumable(mStorageRef, blob)
+                uploadTask.on("state_changed", (snapshot) => {
+                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+                    setProgress(progress.toFixed())
+                },
+                    (error) => {
+                        // Handle error
+                    },
+                    () => {
+                        getDownloadURL(uploadTask.snapshot.ref).then(async (downLoadURL: any) => {
+                            // save record
+                            console.log("File at: " + downLoadURL);
+                        })
+                    }
+                )
+            } catch (error) {
+                console.error('Error uploading image to Firebase Storage', error);
+            } finally {
+                setShowView(true);
+                setLoading(false);
+            }
+        }
+    }
+
+
+    const getConfigAppByUser = async (idUser: string | undefined): Promise<IConfig> => {
+        return new Promise<any>((resolve) => {
+            const dbRef = databaseRef(database, `app/config/user/${idUser}`);
+            onValue(dbRef, (snapshot) => {
+                const configData: any[] | ((prevState: never[]) => never[]) = [];
+                snapshot.forEach((childSnapshot) => {
+                    const childKey = childSnapshot.key;
+                    const childData = childSnapshot.val();
+                    configData.push(childData);
+                });
+                const config: IConfig[] = configData;
+                resolve(config[0]);
+            }, {
+                onlyOnce: true
+            });
+        });
+    }
+
+    const fetchData = async () => {
+        let currentUser = await checkUserLogged();
+        setUser(currentUser);
+        let { upload, change_api, maintain, name } = await getConfigAppByUser(currentUser?.uid);
+        if (upload) {
+            setShowAreaImage(true);
+        }
     }
 
 
@@ -93,7 +187,7 @@ export default function FormInputScreen(props: any) {
         if (!isShowView) {
             sv.value = withRepeat(withTiming(1, { duration: durationLoading, easing }), -1);
         }
-        checkUserLogged();
+        fetchData();
     }, []);
 
     return (
@@ -120,7 +214,7 @@ export default function FormInputScreen(props: any) {
 
                         <Text style={{ fontFamily: 'Inter-Bold' }}
                             className='text-white text-xl mx-4'>
-                            Form
+                            Tuỳ chỉnh API KEY
                         </Text>
                     </View>
 
@@ -129,7 +223,11 @@ export default function FormInputScreen(props: any) {
                         showsVerticalScrollIndicator={false}
                         contentContainerStyle={{ paddingBottom: 50 }}
                     >
-                        <Text style={{ fontFamily: 'Inter-Bold' }} className="text-white py-1 mt-2">API Weather</Text>
+                        <Text style={{ fontFamily: 'Inter-Bold' }} className="text-white py-1 mt-2 underline"
+                            onPress={() => Linking.openURL("https://www.weatherapi.com")}
+                        >
+                            {`API Weather\nhttps://www.weatherapi.com`}
+                        </Text>
                         <TextInput
                             className="text-white p-3 rounded border-gray-300 border"
                             style={{ fontFamily: 'Inter-Medium' }}
@@ -137,7 +235,11 @@ export default function FormInputScreen(props: any) {
                             onChangeText={(text) => setApiWeather(text)}
                         />
 
-                        <Text style={{ fontFamily: 'Inter-Bold' }} className="text-white py-1 mt-2">API Google</Text>
+                        <Text style={{ fontFamily: 'Inter-Bold' }} className="text-white py-1 mt-2 underline"
+                            onPress={() => Linking.openURL("https://console.cloud.google.com")}
+                        >
+                            {`API Google\nhttps://console.cloud.google.com`}
+                        </Text>
                         <TextInput
                             className="text-white p-3 rounded border-gray-300 border"
                             style={{ fontFamily: 'Inter-Medium' }}
@@ -145,34 +247,37 @@ export default function FormInputScreen(props: any) {
                             onChangeText={(text) => setApiGoogle(text)}
                         />
 
-                        <Text style={{ fontFamily: 'Inter-Bold' }} className="text-white py-1 mt-2">API Location</Text>
+                        <Text style={{ fontFamily: 'Inter-Bold' }} className="text-white py-1 mt-2 underline"
+                            onPress={() => Linking.openURL("https://opencagedata.com")}
+                        >
+                            {` API Location\nhttps://opencagedata.com`}
+                        </Text>
                         <TextInput
                             className="text-white p-3 rounded border-gray-300 border"
                             style={{ fontFamily: 'Inter-Medium' }}
                             value={apiLocation}
                             onChangeText={(text) => setApiLocation(text)}
                         />
-
-                        {selectedImage.uri.length > 0 ? (
-                            <Image
-                                className="w-36 h-36 my-3"
-                                source={{ uri: `${selectedImage.uri}` }} />
-                        ) :
-                            (
+                        {isShowAreaImage && <View>
+                            {selectedImage.uri.length > 0 ? (
                                 <Image
                                     className="w-36 h-36 my-3"
-                                    source={require('../assets/images/app_icon.png')} />
-                            )
-                        }
+                                    source={{ uri: `${selectedImage.uri}` }} />
+                            ) :
+                                (
+                                    <Image
+                                        className="w-36 h-36 my-3"
+                                        source={require('../assets/images/app_icon.png')} />
+                                )
+                            }
+                            <TouchableOpacity
+                                className=" bg-sky-400  py-2 px-2 rounded-lg mb-3 my-2 "
+                                onPress={handleImagePicker}>
+                                <Text style={{ fontFamily: 'Inter-Medium' }} className="text-sm text-white text-center">Select Image</Text>
+                            </TouchableOpacity>
+                        </View>}
 
-                        <TouchableOpacity
-                            className=" bg-sky-400  py-2 px-2 rounded-lg mb-3 my-2 "
-                            onPress={handleImagePicker}>
-                            <Text style={{ fontFamily: 'Inter-Medium' }} className="text-sm text-white text-center">Select Image</Text>
-                        </TouchableOpacity>
-
-
-                        <View className="flex-row justify-around mt-3">
+                        <View className="flex-row justify-around pt-10">
                             {loading ? <ActivityIndicator size='large' color='#38bdf8' /> : <>
                                 <TouchableOpacity
                                     className=" bg-sky-400 py-2 px-3 rounded-lg mb-3 "
@@ -182,8 +287,8 @@ export default function FormInputScreen(props: any) {
                             </>}
                             <TouchableOpacity
                                 className=" bg-gray-400 py-2 px-4 rounded-lg mb-3"
-                                onPress={handleClose}>
-                                <Text style={{ fontFamily: 'Inter-Medium' }} className="text-sm text-white text-center">Huỷ</Text>
+                                onPress={handleReset}>
+                                <Text style={{ fontFamily: 'Inter-Medium' }} className="text-sm text-white text-center">Reset API</Text>
                             </TouchableOpacity>
                         </View>
                     </ScrollView>
@@ -194,7 +299,8 @@ export default function FormInputScreen(props: any) {
                     </Animated.View>
                     <FlashMessage position="top" />
                 </View>
-            )}
-        </ImageBackground>
+            )
+            }
+        </ImageBackground >
     )
 }

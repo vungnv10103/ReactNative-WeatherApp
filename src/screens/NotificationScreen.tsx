@@ -35,7 +35,7 @@ export default function NotificationScreen(props: any) {
         }
         setTimeout(() => {
             setShowView(true);
-        }, 2000);
+        }, 5000);
     }, []);
     return (
         <ImageBackground

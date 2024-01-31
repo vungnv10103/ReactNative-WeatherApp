@@ -200,7 +200,7 @@ export default function SignupScreen(props: any) {
                                     secureTextEntry={!isShowPassword}
                                 />
                                 <Ionicons
-                                    name={'eye'} color={'white'} size={24}
+                                    name={isShowPassword ? 'eye' : 'eye-off'} color={'white'} size={24}
                                     style={{
                                         width: '10%',
                                         marginLeft: 2,

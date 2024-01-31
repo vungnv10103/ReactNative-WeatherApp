@@ -23,7 +23,7 @@ export default function Navigation() {
             }}
             shifting={true}
             activeColor="#5a3938"
-            barStyle={{ backgroundColor: '#ffeae9' }}
+            barStyle={{ backgroundColor: '#bbb1c5' }}
         >
             {TabArr.map((tab) => (
                 <Tab.Screen
