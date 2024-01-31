@@ -33,7 +33,7 @@ export default function Navigation() {
                     options={{
                         title: tab.label,
                         tabBarLabel: tab.label,
-                        tabBarBadge: tab.label === "Notification" ? 3 : undefined,
+                        tabBarBadge: tab.label === "Notification" ? 0 : undefined,
                         tabBarIcon: ({ focused, color }) => (
                             <Ionicons name={focused ? tab.activeIcon : tab.inActiveIcon} color={color} size={26} />
                         ),

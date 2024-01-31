@@ -1,8 +1,9 @@
 declare module '@env' {
     //  weather
-    export const API_KEY: string;
-    // map
+    export const API_KEY_WEATHER: string;
+    // google
     export const GOOGLE_API_KEY: string;
+    // location and more
     export const OPENCAGE_API_KEY: string;
     // firebase
     export const API_KEY_FIREBASE: string;

@@ -41,7 +41,6 @@ export default function HomeScreen() {
 
     const handleLocation = async (location: ILocation): Promise<void> => {
         setLoading(true);
-        // console.log(location);
         let dataLocation = JSON.stringify(location);
         await AsyncStorage.setItem('location', dataLocation);
         setLocations([]);
@@ -50,7 +49,8 @@ export default function HomeScreen() {
             cityName: location.name,
             days: forecastDay
         }).then(data => {
-            // console.log(data);
+            console.log("get weather home screen");
+            // console.log(JSON.stringify(data, null, 2));
             setLoading(false);
             setWeather(data);
         });
@@ -61,6 +61,7 @@ export default function HomeScreen() {
         fetchLocation({
             cityName: value
         }).then(data => {
+            console.log("data location suggest home screen");
             setLocations(data);
         });
     };
@@ -73,7 +74,7 @@ export default function HomeScreen() {
             timeout: timeoutAPI,
         })
             .then(location => {
-                // console.log(location);
+                console.log(`get location home screen`);
                 let myLat = location.latitude;
                 let myLon = location.longitude;
                 fetch('https://api.opencagedata.com/geocode/v1/json?q=' + myLat + ',' + myLon + '&key=' + apiKeyOpenCage)

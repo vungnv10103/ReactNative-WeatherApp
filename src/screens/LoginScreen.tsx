@@ -1,16 +1,16 @@
-import { View, Text, TextInput, ImageBackground, StatusBar, TouchableOpacity, ActivityIndicator } from 'react-native'
+import { View, Text, TextInput, ImageBackground, StatusBar, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native'
 import React, { useState, useEffect } from 'react'
 
 import { apiKeyOpenCage } from '../constants';
 import { IConfig, ILocation, IUser } from '../interface/_index'
-import { convertENtoVi, formatTemperature, getImageSource, removeVietnameseAccent } from '../utils';
+import { removeVietnameseAccent } from '../utils';
 
 
 import { auth, database } from '../config/firebase.config';
-import { signInWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
+import { signInWithEmailAndPassword, onAuthStateChanged, User } from 'firebase/auth';
 import { ref as databaseRef, onValue, update, remove } from "firebase/database";
 
-
+import Ionicons from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import GetLocation from 'react-native-get-location';
 import FlashMessage, { showMessage, hideMessage, MessageType } from "react-native-flash-message";
@@ -43,6 +43,11 @@ export default function LoginScreen(props: any) {
     const [isShowView, setShowView] = useState(false);
     const [isLogged, setLogged] = useState(false);
     const [isLoading, setLoading] = useState(false);
+    const [isShowPassword, setShowPassword] = useState(false);
+
+    const toggleShowPassword = () => {
+        setShowPassword(!isShowPassword);
+    };
 
     const animatedStyle = useAnimatedStyle(() => ({
         transform: [{ rotate: `${sv.value * 360}deg` }],
@@ -50,7 +55,7 @@ export default function LoginScreen(props: any) {
 
     const getConfigAppByKey = async (key: string) => {
         return new Promise<any>((resolve) => {
-            const dbRef = databaseRef(database, `app/${key}`);
+            const dbRef = databaseRef(database, `app/config/global/${key}`);
             onValue(dbRef, (snapshot) => {
                 resolve(snapshot.val());
             }, {
@@ -61,7 +66,7 @@ export default function LoginScreen(props: any) {
 
     const getConfigAppByUser = async (idUser: string) => {
         return new Promise<any>((resolve) => {
-            const dbRef = databaseRef(database, `app/${idUser}`);
+            const dbRef = databaseRef(database, `app/config/user/${idUser}`);
             onValue(dbRef, (snapshot) => {
                 const configData: any[] | ((prevState: never[]) => never[]) = [];
                 snapshot.forEach((childSnapshot) => {
@@ -77,44 +82,46 @@ export default function LoginScreen(props: any) {
                 onlyOnce: true
             });
         });
-
     }
 
     const handleEvent = async (title: string, message: string, type: MessageType | null, eventType: string, delay?: number) => {
+        switch (eventType) {
+            case "login_success":
+                setLoading(false);
+                setLogged(true);
+                await AsyncStorage.setItem("status", "logged");
+                props.navigation.reset({
+                    index: 0,
+                    routes: [{ name: 'Navigation' }],
+                });
+                break;
+
+            case "maintain":
+                setShowView(false);
+                setLogged(false);
+                setCurrentUser(null);
+                setLoading(false);
+                try {
+                    await AsyncStorage.clear();
+                } catch (e) {
+                    console.log("AsyncStorage.clear(): ", e);
+                }
+                // await AsyncStorage.setItem('status', "expires");
+                break;
+
+            case "expires":
+                setShowView(true);
+                break;
+
+            default:
+                console.log("login: eventType: ", eventType);
+                break;
+        }
         showMessage({
             message: title,
             description: message,
             type: type != null ? type : 'default',
             duration: delay || durationToast,
-            async onHide() {
-                switch (eventType) {
-                    case "login_success":
-                        setLoading(false);
-                        setLogged(true);
-                        await AsyncStorage.setItem("status", "logged");
-                        props.navigation.reset({
-                            index: 0,
-                            routes: [{ name: 'Navigation' }],
-                        });
-                        break;
-                    case "maintain":
-                        setShowView(false);
-                        setLogged(false);
-                        setCurrentUser(null);
-                        setLoading(false);
-                        try {
-                            await AsyncStorage.clear();
-                        } catch (e) {
-                            console.log("AsyncStorage.clear(): ", e);
-                        }
-                        await AsyncStorage.setItem('status', "expires");
-                        break;
-
-                    default:
-                        console.log("eventType: ", eventType);
-                        break;
-                }
-            },
         });
     }
 
@@ -125,7 +132,7 @@ export default function LoginScreen(props: any) {
             timeout: timeoutAPI,
         })
             .then(location => {
-                // console.log(location);
+                console.log(`get location login screen`);
                 let myLat = location.latitude;
                 let myLon = location.longitude;
                 fetch('https://api.opencagedata.com/geocode/v1/json?q=' + myLat + ',' + myLon + '&key=' + apiKeyOpenCage)
@@ -164,6 +171,15 @@ export default function LoginScreen(props: any) {
             await getCurrentLocation();
         }
     }
+    const handleLogin = async (user: User) => {
+        let isMaintainUser = await getConfigAppByUser(user.uid);
+        if (isMaintainUser) {
+            await handleEvent("Thông báo !", "Ứng dụng tạm đóng để tiến hành bảo trì.\nVui lòng quay lại sau.", "info", "maintain", 5000);
+        } else {
+            setCurrentUser(user);
+            handleEvent("Thông báo !", "Đăng nhập thành công", "success", "login_success");
+        }
+    }
 
     const login = async () => {
         setLoading(true);
@@ -180,27 +196,27 @@ export default function LoginScreen(props: any) {
                 let data = JSON.stringify(response, null, 2);
                 const user = response.user;
                 if (user != null) {
-                    handleEvent("Thông báo !", "Đăng nhập thành công", "success", "login_success");
+                    handleLogin(user);
                 }
             } catch (error: any) {
                 const { code, message } = error;
                 console.log(code);
                 switch (code) {
                     case "auth/missing-password":
-                        handleEvent("Thông báo !", "Vui lòng điền mật khẩu", "danger", "none");
+                        handleEvent("Lỗi !", "Vui lòng điền mật khẩu", "danger", "none");
                         break;
                     case "auth/invalid-email":
-                        handleEvent("Thông báo !", "Email không đúng định dạng", "danger", "none");
+                        handleEvent("Lỗi !", "Email không đúng định dạng", "danger", "none");
                         break;
                     case "auth/network-request-failed":
-                        handleEvent("Thông báo !", "Vui lòng kết nối internet", "danger", "none");
+                        handleEvent("Lỗi !", "Vui lòng kết nối internet", "danger", "none");
                         break;
                     case "auth/invalid-credential":
-                        handleEvent("Thông báo !", "Thông tin không chính xác", "danger", "none");
+                        handleEvent("Lỗi !", "Thông tin không chính xác", "danger", "none");
                         break;
 
                     default:
-                        handleEvent("Thông báo !", message, "danger", "none");
+                        handleEvent("Lỗi !", message, "danger", "none");
                         break;
                 }
             } finally {
@@ -212,16 +228,14 @@ export default function LoginScreen(props: any) {
     const checkUserLogged = async () => {
         onAuthStateChanged(auth, async (user) => {
             if (user) {
-                let isMaintainUser = await getConfigAppByUser(user.uid);
-                if (isMaintainUser) {
-                    handleEvent("Thông báo !", "Ứng dụng tạm đóng để tiến hành bảo trì.\nVui lòng quay lại sau.", "info", "maintain", 5000);
-                } else {
-                    setCurrentUser(user);
-                    handleEvent("Thông báo !", "Đăng nhập thành công", "success", "login_success");
-                }
+                handleLogin(user);
             } else {
-                handleEvent("Thông báo !", "Phiên đăng nhâp hết hạn", "info", "none");
-                setShowView(true);
+                let status = await AsyncStorage.getItem('status');
+                if (status === "expires") {
+                    handleEvent("Thông báo !", "Phiên đăng nhập đã hết hạn.", "info", "expires", 2000);
+                } else {
+                    setShowView(true);
+                }
             }
         });
     }
@@ -231,14 +245,11 @@ export default function LoginScreen(props: any) {
         if (isMaintainMain) {
             handleEvent("Thông báo !", "Ứng dụng tạm đóng để tiến hành bảo trì.\nVui lòng quay lại sau.", "info", "maintain", 5000);
         } else {
-            let status = await AsyncStorage.getItem('status');
-            if (status === "expires") {
-                handleEvent("Thông báo !", "Phiên đăng nhập đã hết hạn.", "info", "expires", 2000);
-            }
             await checkUserLogged();
             getWeatherPrevious();
         }
     }
+
     useEffect(() => {
         if (!isLogged) {
             sv.value = withRepeat(withTiming(1, { duration: durationLoading, easing }), -1);
@@ -253,67 +264,83 @@ export default function LoginScreen(props: any) {
             className='h-full w-full'>
             <StatusBar barStyle="default" />
             {isShowView ? (
-                <View className="flex justify-around my-5 pt-20">
-                    {/* title */}
-                    <View className="flex items-center">
-                        <Animated.Text
-                            style={{ fontFamily: 'Inter-Bold' }}
-                            entering={FadeInUp.duration(1000).springify()}
-                            className="text-white  tracking-wider text-5xl">
-                            Login
-                        </Animated.Text>
-                    </View>
-                    {/* form */}
-                    <View className="flex items-center mx-5 space-y-4 pt-20">
-                        <Animated.View
-                            entering={FadeInDown.duration(1000).springify()}
-                            className="bg-white/5 p-1.5 rounded-lg w-full">
-                            <TextInput
-                                style={{ fontFamily: 'Inter-Medium' }}
-                                className="text-white"
-                                value={email}
-                                onChangeText={(text) => setEmail(text)}
-                                placeholder="Email"
-                                placeholderTextColor={'gray'}
-                            />
-                        </Animated.View>
-                        <Animated.View
-                            entering={FadeInDown.delay(200).duration(1000).springify()}
-                            className="bg-white/5 p-1.5 rounded-lg w-full mb-3">
-                            <TextInput
-                                style={{ fontFamily: 'Inter-Medium' }}
-                                className="text-white"
-                                value={password}
-                                onChangeText={(text) => setPassword(text)}
-                                placeholder="Password"
-                                placeholderTextColor={'gray'}
-                                secureTextEntry
-                            />
-                        </Animated.View>
-                        <Animated.View
-                            className="w-full"
-                            entering={FadeInDown.delay(400).duration(1000).springify()}>
-                            {isLoading ? <ActivityIndicator size={"large"} color='#38bdf8' /> : <>
-                                <TouchableOpacity
-                                    className="w-full bg-sky-400 p-3 rounded-lg mb-3"
-                                    onPress={login}>
-                                    <Text style={{ fontFamily: 'Inter-Bold' }} className="text-xl text-white text-center">Login</Text>
-                                </TouchableOpacity>
-                            </>}
-                        </Animated.View>
-                        <Animated.View
-                            entering={FadeInDown.delay(600).duration(1000).springify()}
-                            className="flex-row justify-center p-1">
-                            <Text style={{ fontFamily: 'Inter-Medium' }} className="text-gray-400">Don't have an account? </Text>
-                            <TouchableOpacity
-                                onPress={() => props.navigation.push('Signup')}
+                <ScrollView
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={{ paddingBottom: 30 }}
+                >
+                    <View className="flex justify-around my-5 pt-20">
+                        {/* title */}
+                        <View className="flex items-center">
+                            <Animated.Text
+                                style={{ fontFamily: 'Inter-Bold' }}
+                                entering={FadeInUp.duration(1000).springify()}
+                                className="text-white  tracking-wider text-5xl"
                             >
-                                <Text style={{ fontFamily: 'Inter-Bold' }} className="text-white">Signup</Text>
-                            </TouchableOpacity>
-                        </Animated.View>
+                                Login
+                            </Animated.Text>
+                        </View>
+                        {/* form */}
+                        <View className="flex items-center mx-5 space-y-4 pt-20">
+                            <Animated.View
+                                entering={FadeInDown.duration(1000).springify()}
+                                className="bg-white/5 p-1.5 rounded-lg w-full">
+                                <TextInput
+                                    style={{ fontFamily: 'Inter-Medium' }}
+                                    className="text-white"
+                                    value={email}
+                                    onChangeText={(text) => setEmail(text)}
+                                    placeholder="Email"
+                                    placeholderTextColor={'gray'}
+                                />
+                            </Animated.View>
+                            <Animated.View
+                                entering={FadeInDown.delay(200).duration(1000).springify()}
+                                className="bg-white/5 flex-row justify-between items-center p-1.5 rounded-lg w-full mb-3">
+                                <TextInput
+                                    style={{ fontFamily: 'Inter-Medium', width: '90%' }}
+                                    className="text-white"
+                                    value={password}
+                                    onChangeText={(text) => setPassword(text)}
+                                    placeholder="Password"
+                                    placeholderTextColor={'gray'}
+                                    secureTextEntry={!isShowPassword}
+                                />
+                                <Ionicons
+                                    name={'eye'} color={'white'} size={24}
+                                    style={{
+                                        width: '10%',
+                                        marginLeft: 2,
+                                        textAlign: 'center',
+                                    }}
+                                    onPress={toggleShowPassword}
+                                />
+                            </Animated.View>
+
+                            <Animated.View
+                                className="w-full"
+                                entering={FadeInDown.delay(400).duration(1000).springify()}>
+                                {isLoading ? <ActivityIndicator size={"large"} color='#38bdf8' /> : <>
+                                    <TouchableOpacity
+                                        className="w-full bg-sky-400 p-3 rounded-lg mb-3"
+                                        onPress={login}>
+                                        <Text style={{ fontFamily: 'Inter-Bold' }} className="text-xl text-white text-center">Login</Text>
+                                    </TouchableOpacity>
+                                </>}
+                            </Animated.View>
+                            <Animated.View
+                                entering={FadeInDown.delay(600).duration(1000).springify()}
+                                className="flex-row justify-center p-1">
+                                <Text style={{ fontFamily: 'Inter-Medium' }} className="text-gray-400">Don't have an account? </Text>
+                                <TouchableOpacity
+                                    onPress={() => props.navigation.push('Signup')}
+                                >
+                                    <Text style={{ fontFamily: 'Inter-Bold' }} className="text-white">Signup</Text>
+                                </TouchableOpacity>
+                            </Animated.View>
+                        </View>
+                        <FlashMessage style={{ marginHorizontal: 20 }} position="top" />
                     </View>
-                    <FlashMessage style={{ marginHorizontal: 20 }} position="top" />
-                </View>
+                </ScrollView>
             ) : (
                 <View className='m-5 flex-1 justify-center items-center h-full'>
                     <Animated.View className='h-16 w-16 bg-red-400 rounded-2xl' style={[animatedStyle]}>

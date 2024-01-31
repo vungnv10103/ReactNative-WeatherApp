@@ -3,6 +3,7 @@ import LoginScreen from "./LoginScreen";
 import HomeScreen from "./HomeScreen";
 import NotificationScreen from "./NotificationScreen";
 import SettingScreen from "./SettingScreen";
+import FormInputScreen from "./FormInputScreen";
 
 
 
@@ -12,4 +13,5 @@ export {
     HomeScreen,
     NotificationScreen,
     SettingScreen,
+    FormInputScreen
 }

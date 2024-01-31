@@ -1,5 +1,5 @@
 import {
-    API_KEY,
+    API_KEY_WEATHER,
     GOOGLE_API_KEY,
     OPENCAGE_API_KEY,
     API_KEY_FIREBASE,
@@ -11,9 +11,14 @@ import {
     APP_ID,
 } from "@env";
 
-export const apiKey = API_KEY;
+// api key from : https://www.weatherapi.com
+export const apiKeyWeather = API_KEY_WEATHER;
+
 export const apiKeyGoogle = GOOGLE_API_KEY;
+// api key from : https://opencagedata.com/api
 export const apiKeyOpenCage = OPENCAGE_API_KEY;
+
+// default config firebase
 export const apiKeyFB = API_KEY_FIREBASE;
 export const authDomain = AUTH_DOMAIN;
 export const databaseURL = DATABASE_URL;
